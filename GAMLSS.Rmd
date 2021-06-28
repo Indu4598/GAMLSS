@@ -1,0 +1,236 @@
+---
+title: "Argus"
+author: "Indumathi"
+date: "6/14/2021"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r,message = FALSE, warning = FALSE}
+library(gamlss)
+library(gamlss.add)
+library(gamlss.dist)
+library(dplyr)
+library(roll)
+library(shiny)
+library(tseries)
+
+data(oil)
+```
+
+
+```{r d1, echo=FALSE}
+
+numericInput("rows", "How many Columns?", 5)
+
+renderTable({
+  head(oil, input$rows)
+})
+
+```
+
+
+
+
+
+
+
+```{r d2, echo = FALSE}
+
+shinyApp(
+ui = fluidPage(
+    title = "Examples of DataTables",
+    sidebarLayout(
+        sidebarPanel(
+            conditionalPanel(
+                'input.Operations === "Simple Operaions"',
+                
+                
+                selectInput("var1", "Operations",
+                            c("rolling_std" = "rolling_std",
+                              "rolling_mean" =  "rolling_mean",
+                              "Lagging" =  "Lagging",
+                              "Leading" =  "Leading",
+                              "Differencing" = "Differencing"
+                            )),
+                
+                selectInput("var2", "Columns in Oil:",
+                            names(oil) , selected = "OILPRICE"),
+                
+                textInput("var3", "Width" , 2)
+            ),
+            conditionalPanel(
+                'input.Operations === "Compound"',
+                
+                selectInput("var_c1", "Operations",
+                            c("Product" = "Product",
+                              "Ratio" =  "Ratio",
+                              "Spread" =  "Spread")),
+                
+                checkboxGroupInput("var_c2","columns in Oil",
+                    choices = names(oil)),
+                
+                selectInput("var_c3", "Operations",
+                            c( "None" = "None",
+                               "rolling_std" = "rolling_std",
+                              "rolling_mean" =  "rolling_mean",
+                              "Lagging" =  "Lagging",
+                              "Leading" =  "Leading",
+                              "Differencing" = "Differencing"
+                            ))
+                
+            ),
+            conditionalPanel(
+                'input.dataset === "Statistics"',
+                
+            )
+        ),
+        mainPanel(
+            tabsetPanel(
+                id = 'Operations',
+                tabPanel("Simple Operaions", DT::dataTableOutput("mytable1")),
+                tabPanel("Compound", DT::dataTableOutput("mytable2")),
+                tabPanel("Statistics", DT::dataTableOutput("mytable3"))
+            )
+        )
+    )
+),
+
+
+
+
+
+server <- function(input, output) {
+    
+    #Table 1 for Simple Ops    
+    output$mytable1 <- DT::renderDataTable({
+        
+        
+        
+        if (input$var1 == "rolling_std") {
+            new.function(input$var2,input$var3)
+            
+            #oil$rolling_std = roll_sd(oil[,input$var2],width = input$var3 )
+        }
+        
+        else if (input$var1 == "rolling_mean") {
+            
+            oil$rolling_mean = roll_mean(oil[,input$var2],width = input$var3 )
+        }
+        
+        else if (input$var1 == "Lagging") {
+            
+            oil$Lagging = lag(oil[,input$var2],width = input$var3 )
+        }
+        
+        else if (input$var1 == "Leading") {
+            
+            oil$Leading = lead(oil[,input$var2],width = input$var3 )
+        }
+        
+        else if(input$var1 == "Differencing"){
+            
+            diff = diff(oil[,1],lag = 2)
+            len.diff <-  length(oil[,1]) - length(diff)
+            diff = c(rep(0, len.diff), diff) 
+            oil$Differencing = diff
+            
+        }
+        
+        write.csv(oil,"oil.csv")
+        DT::datatable(oil[,input$var1, drop = FALSE])
+        
+    })
+    
+    
+    
+    
+    
+    
+    # sorted columns are colored now because CSS are attached to them
+    output$mytable2 <- DT::renderDataTable({
+       
+        if (input$var_c1 == "Ratio") {
+           
+           oil$Ratio = oil[,input$var_c2[1]]/oil[,input$var_c2[2]]
+            
+        }
+        else if (input$var_c1 == "Product") {
+            
+            oil$Product = oil[,input$var_c2[1]]*oil[,input$var_c2[2]]
+        }
+        
+        else if (input$var_c1 == "Spread") {
+            
+            oil$Spread = oil[,input$var_c2[1]] - oil[,input$var_c2[2]]
+        }
+        
+        
+        
+        
+        
+        if (input$var_c3 == "rolling_std") {
+            
+            oil[,input$var_c1] = roll_sd(oil[,input$var_c1],width = 2)
+        }
+        
+        else if (input$var_c3 == "rolling_mean") {
+            
+            oil[,input$var_c1] = roll_mean(oil[,input$var_c1],width = 2 )
+        }
+        
+        else if (input$var_c3 == "Lagging") {
+            
+            oil[,input$var_c1] = lag(oil[,input$var_c1],width = 2 )
+        }
+        
+        else if (input$var_c3 == "Leading") {
+            
+            oil[,input$var_c1] = lead(oil[,input$var_c1],width = 2 )
+        }
+        
+        else if(input$var_c3 == "Differencing"){
+            
+            diff = diff(oil[,1],lag = 2)
+            len.diff <-  length(oil[,1]) - length(diff)
+            diff = c(rep(0, len.diff), diff) 
+            oil$Differencing = diff
+            
+        }
+        
+        else if(input$var_c3 == "None"){
+          oil[,input$var_c1] = oil[,input$var_c1]
+            }
+        
+        write.csv(oil,"oil.csv")
+        DT::datatable(oil[,input$var_c1,drop = FALSE])
+    })
+    
+
+    
+    
+    # customize the length drop-down menu; display 5 rows per page by default
+    output$mytable3 <- DT::renderDataTable({
+        DT::datatable(iris, options = list(lengthMenu = c(5, 30, 50), pageLength = 5))
+    })
+    
+    
+}
+)
+```
+
+
+
+
+```{r tabsets, echo=FALSE}
+
+
+```
+
+
+
+
